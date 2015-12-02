@@ -1,0 +1,7 @@
+composer.phar
+composer.lock
+phpunit.xml
+.project
+*.sw*
+vendor
+*~
