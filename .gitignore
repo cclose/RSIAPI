@@ -1,7 +1,15 @@
+#ignore composer local stuff
 composer.phar
 composer.lock
-phpunit.xml
-.project
-*.sw*
 vendor
+
+#ignore phpunit local stuff
+phpunit.xml
+
+#ignore text editor backup files
+*.sw*
 *~
+
+#ignore JetBrains IDE files (PHPStorm)
+.project
+.idea
