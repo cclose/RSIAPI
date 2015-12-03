@@ -37,4 +37,13 @@ class RSIClientTest extends \PHPUnit_Framework_TestCase {
         $this->assertSame($guzzle, $client->getClient());
     }
 
+    public function testFundingRequest() {
+        $client = new RSIClient();
+        $fundingData = $client->getFundingData();
+
+        $this->assertArrayHasKey('fans',  $fundingData);
+        $this->assertArrayHasKey('fleet', $fundingData);
+        $this->assertArrayHasKey('funds', $fundingData);
+    }
+
 }
