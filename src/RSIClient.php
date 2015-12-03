@@ -22,23 +22,26 @@
  *
  * @author Cory Close <pulsar2612@hotmail.com>
  */
-class RSIClient {
+ class RSIClient {
 
-  /**
-   * @var GuzzleClient $client
-   */
-  protected $client;
+     /**
+      * @var GuzzleClient $client
+      */
+     protected $client;
 
-  public function __construct(GuzzleClient $client = null) {
-    if(is_null($client)) {
-      $this->client = new GuzzleClient(array('defaults' => array('allow_redirects' => false, 'cookies' => true)));
-    }
+     public function __construct(GuzzleClient $client = null) {
+         if(is_null($client)) {
+             $client = new GuzzleClient(array('defaults' => array('allow_redirects' => false, 'cookies' => true)));
+         }
 
-    $this->client = $client;
-  }
+         $this->client = $client;
+     }
 
-  public function sayHi() {
-    echo "Hello again, Sybil";
-  }
-   
-}
+     /**
+      * @return GuzzleClient
+      */
+     public function getClient() {
+         return $this->client;
+     }
+
+ }
