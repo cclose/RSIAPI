@@ -200,7 +200,7 @@
                  $name = null;
                  $nick = null;
                  $rank = null;
-                 $citNum = null;
+                 $roles = array();
 
 
                  //get the class of the li
@@ -262,22 +262,41 @@
                  //get the rank div
                  $rankDiv = $finder->query(".//span[contains(@class, 'rank') and not(contains(@class, 'ranking-stars'))]", $node);
                  if($rankDiv->length > 1) {
-                     echo "found ". $rankDiv->length."\n";
                      throw new BadResponseDataException('Multiple Rank Divs detected for member node');
                  } elseif($rankDiv->length == 1) {
                      $rankDiv = $rankDiv->item(0); //zero because there's only 1
                      $rank = $rankDiv->textContent;
                  }
 
+                 //get the role ul
+                 $roleUL = $finder->query(".//ul[contains(@class, 'rolelist')]", $node);
+                 if($roleUL->length > 1) {
+                     throw new BadResponseDataException('Multiple RoleULs detected for member node');
+                 } elseif($roleUL->length == 1) {
+                     $roleUL = $roleUL->item(0); //zero because there's only 1
+                     //get the child li's, these have Roles in them
+                     $roleLIs = $roleUL->getElementsByTagName('li');
+                     foreach($roleLIs as $roleLI) {
+                         $rliclass = $roleLI->getAttribute('class');
+                         //if this is a role li
+                         if(preg_match('/role/', $rliclass)) {
+                             $roles[] = $roleLI->textContent;
+                         }
+                     }
+                 }
+
                  //package it up nicely
                  //TODO replace with a class-struct
-                 $members[] = array(
+                 $memberInfo = array(
                      'name' => $name,
                      'nick' => $nick,
                      'affiliate' => $affiliate,
                      'vis' => $type,
-                     'rank' => $rank
+                     'rank' => $rank,
+                     'roles' => $roles
                  );
+                 $members[] = $memberInfo;
+
              }
          }
 
