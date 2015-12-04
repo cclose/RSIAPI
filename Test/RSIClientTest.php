@@ -17,7 +17,7 @@ class RSIClientTest extends \PHPUnit_Framework_TestCase {
      * @return GuzzleClient
      */
     protected function getGuzzle() {
-        return new GuzzleClient(array('defaults' => array('allow_redirects' => false, 'cookies' => true)));
+        return new GuzzleClient(array('defaults' => array('allow_redirects' => false, 'cookies' => false)));
     }
 
     /**
@@ -44,6 +44,14 @@ class RSIClientTest extends \PHPUnit_Framework_TestCase {
         $this->assertArrayHasKey('fans',  $fundingData);
         $this->assertArrayHasKey('fleet', $fundingData);
         $this->assertArrayHasKey('funds', $fundingData);
+    }
+
+    public function testMemberList() {
+        $client = new RSIClient();
+        $memberData = $client->getOrgMembers('BECH');
+
+        $this->assertArrayHasKey('totalMembers',  $memberData);
+        $this->assertArrayHasKey('memberList',  $memberData);
     }
 
 }

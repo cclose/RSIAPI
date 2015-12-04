@@ -11,10 +11,15 @@
 
  namespace RSIAPI;
 
+ use DOMElement;
+ use DOMNode;
+ use DOMNodeList;
+ use DOMXPath;
  use GuzzleHttp\Client as GuzzleClient;
  use GuzzleHttp\Exception\BadResponseException;
  use GuzzleHttp\Exception\RequestException;
  use GuzzleHttp\Stream\Stream;
+ use RSIAPI\Exception\BadResponseDataException;
  use RSIAPI\Exception\RequestFailedException;
 
  /**
@@ -33,7 +38,7 @@
 
      public function __construct(GuzzleClient $client = null) {
          if(is_null($client)) {
-             $client = new GuzzleClient(array('defaults' => array('allow_redirects' => false, 'cookies' => true)));
+             $client = new GuzzleClient(array('defaults' => array('allow_redirects' => false, 'cookies' => false)));
          }
 
          $this->client = $client;
@@ -56,6 +61,8 @@
      /**
       * @param       $url
       * @param array $data
+      *
+      * @return array
       */
      public function submitRequest($url, array $data = null) {
          $fullurl = $this::$RSI_API_URL . $url;
@@ -87,7 +94,13 @@
 
          $returnData = json_decode($body, true);
 
-         return $returnData;
+         if(array_key_exists('success', $returnData) && $returnData['success'] == 1) {
+             $payload = $returnData['data'];
+         } else {
+             throw new BadResponseException($url . ' Request failed: '.$returnData['msg'], $request, $response);
+         }
+
+         return $payload;
      }
 
      /**
@@ -100,14 +113,175 @@
              'fleet' => true,
              'funds' => true
          );
-         $return = $this->submitRequest('stats/getCrowdfundStats', $data);
-
-         if(array_key_exists('success', $return) && $return['success'] == 1) {
-             $fundData = $return['data'];
-         } else {
-             throw new RequestFailedException('FundingData Request failed: '.$return['msg']);
-         }
+         $fundData = $this->submitRequest('stats/getCrowdfundStats', $data);
 
          return $fundData;
      }
+
+     /**
+      * @param $orgId
+      *
+      * @return array('totalMembers', 'memberList')
+      * @throws BadResponseDataException
+      * @throws RequestFailedException
+      */
+     public function getOrgMembers($orgId) {
+         $pageSize = 30;
+         $memberData = $this->retrieveOrgMemberlist($orgId, 1, $pageSize);
+         if(!array_key_exists('totalrows', $memberData)) {
+             throw new BadResponseDataException('getOrgMembers missing value \'totalrows\'');
+         }
+         $totalMembers = $memberData['totalrows'];
+
+         $members = $this->parseMemberData($memberData);
+
+         //find the number of pages by dividing total by page size, rounding up
+         $numPages = ceil($totalMembers / $pageSize);
+         //retrieve all pages. Our first request already got page 1, so start at 2
+         for($page = 2; $page <= $numPages; $page++) {
+             $memberData = $this->retrieveOrgMemberlist($orgId, $page, $pageSize);
+             $members = array_merge($members, $this->parseMemberData($memberData));
+         }
+
+
+         $return = array(
+             'totalMembers' => $totalMembers,
+             'memberList' => $members
+         );
+
+         return $return;
+     }
+
+     /**
+      * @param     $orgId
+      * @param     $page
+      * @param int $pageSize
+      *
+      * @return mixed
+      * @throws RequestFailedException
+      */
+     private function retrieveOrgMemberlist($orgId, $page, $pageSize=30) {
+         $data = array(
+             'page' => $page,
+             'pagesize' => $pageSize,
+             'search' => '',
+             'symbol' => $orgId
+         );
+         $memberData = $this->submitRequest('orgs/getOrgMembers', $data);
+
+         return $memberData;
+     }
+
+     /**
+      * @param array $memberData
+      *
+      * @return array
+      * @throws BadResponseDataException
+      */
+     private function parseMemberData(array $memberData) {
+         $members = array();
+         if(!array_key_exists('html', $memberData)) {
+             throw new BadResponseDataException('getOrgMembers missing value \'html\'');
+         }
+         $html = $memberData['html'];
+         if(!is_null($html) && $html != '') {
+
+             $DOM = new \DOMDocument();
+             $DOM->loadHTML($html);
+             $finder    = new DomXPath($DOM);
+
+             //get the member-item li's
+             $nodes     = $finder->query("//li[contains(@class, 'member-item')]");
+
+             /** @var DOMElement $node */
+             foreach($nodes as $node) {
+                 $affiliate = true;
+                 $type = false;
+                 $name = null;
+                 $nick = null;
+                 $rank = null;
+                 $citNum = null;
+
+
+                 //get the class of the li
+                 // this contains main/affil and visibility
+                 $class = $node->getAttribute('class');
+                 //visible members
+                 if(preg_match('/org-visibility-V/', $class)) {
+                     $type = 'main';
+                 }
+                 //redacted
+                 if(preg_match('/org-visibility-R/', $class)) {
+                     $type = 'reddacted';
+                 }
+                 //hidden
+                 if(preg_match('/org-visibility-H/', $class)) {
+                     $type = 'hidden';
+                 }
+
+                 //non-affils have this
+                 if(preg_match('/org-main/', $class)) {
+                     $affiliate = false;
+                 }
+
+                 //VERY IMPORTANT NOTE
+                 // If you are back-engineering this THE LEADING PERIOD IS VITALLY IMPORTANT
+                 // the // makes the f%$%^ing query relative to the document root, so you NEED
+                 // the leading period to make the query relative to the $node
+                 //
+                 // When i originally wrote this, i didn't have the leading period and this query
+                 // returned ALL name-wrap spans from the return data, every. time.
+                 // SUCH FRUSTERATION. MANY BALD. WOW.
+                 $nameNode = $finder->query(".//span[contains(@class, 'name-wrap')]", $node);
+                 //we should only have on name-wrap span. bitch if this is not true
+                 if($nameNode->length == 0) {
+                    throw new BadResponseDataException('No NameNodes detected for member node');
+                 }
+                 if($nameNode->length > 1) {
+                     throw new BadResponseDataException('Multiple NameNodes detected for member node');
+                 }
+
+                 //get the name-wrap span. 0 because we only got one, DUH
+                 $nameNode = $nameNode->item(0);
+                 //get the childen spans, theses contain Nick and Name
+                 $nameNodes = $nameNode->getElementsByTagName('span');
+                 /** @var DOMElement $nameNode */
+                 foreach($nameNodes as $nameNode) {
+                     $nnclass = $nameNode->getAttribute('class');
+                     //if this is the name node
+                     if(preg_match('/name/', $nnclass)) {
+                         $name = $nameNode->textContent;
+                     }
+                     //or if this is the nick node
+                     if(preg_match('/nick/', $nnclass)) {
+                         $nick = $nameNode->textContent;
+                     }
+                 }
+                 //TODO filter out names/nicks that are 100% &nbsp;
+
+                 //get the rank div
+                 $rankDiv = $finder->query(".//span[contains(@class, 'rank') and not(contains(@class, 'ranking-stars'))]", $node);
+                 if($rankDiv->length > 1) {
+                     echo "found ". $rankDiv->length."\n";
+                     throw new BadResponseDataException('Multiple Rank Divs detected for member node');
+                 } elseif($rankDiv->length == 1) {
+                     $rankDiv = $rankDiv->item(0); //zero because there's only 1
+                     $rank = $rankDiv->textContent;
+                 }
+
+                 //package it up nicely
+                 //TODO replace with a class-struct
+                 $members[] = array(
+                     'name' => $name,
+                     'nick' => $nick,
+                     'affiliate' => $affiliate,
+                     'vis' => $type,
+                     'rank' => $rank
+                 );
+             }
+         }
+
+       return $members;
+     }
+
  }
