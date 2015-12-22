@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#install composer if it's missing
+  if [ ! -f 'composer.phar' ] ; then
+  echo "Composer Not Found... installing"
+  curl -sS https://getcomposer.org/composer.phar > composer.phar
+  if [ $? -eq 0 ] ; then 
+    echo "Installed!"
+  else
+    echo "Composer failed to install!";
+    exit 1;
+  fi
+fi
+
+#double check
+if [ ! -f 'composer.phar' ] ; then
+  echo "Composer failed to install!";
+  exit 1;
+else
+  COMPOSER_HOME='/var/www/composer/home' COMPOSER_CACHE_DIR='/var/www/composer/cache' bash -c "php -d allow_url_fopen=1 -d suhosin.executor.include.whitelist=phar composer.phar $@";
+fi
