@@ -16,9 +16,12 @@
  use DOMNodeList;
  use DOMXPath;
  use GuzzleHttp\Client as GuzzleClient;
+ use GuzzleHttp\Cookie\CookieJar;
+ use GuzzleHttp\Cookie\SetCookie;
  use GuzzleHttp\Exception\BadResponseException;
  use GuzzleHttp\Exception\RequestException;
  use GuzzleHttp\Stream\Stream;
+ use GuzzleHttp\Subscriber\Cookie;
  use RSIAPI\Exception\BadResponseDataException;
  use RSIAPI\Exception\RequestFailedException;
 
@@ -64,7 +67,7 @@
       *
       * @return array
       */
-     public function submitRequest($url, array $data = null) {
+     public function submitAJAXRequest($url, array $data = null) {
          $fullurl = $this::$RSI_API_URL . $url;
 
          $client = $this->getClient();
@@ -113,7 +116,7 @@
              'fleet' => true,
              'funds' => true
          );
-         $fundData = $this->submitRequest('stats/getCrowdfundStats', $data);
+         $fundData = $this->submitAJAXRequest('stats/getCrowdfundStats', $data);
 
          return $fundData;
      }
@@ -167,7 +170,7 @@
              'search' => '',
              'symbol' => $orgId
          );
-         $memberData = $this->submitRequest('orgs/getOrgMembers', $data);
+         $memberData = $this->submitAJAXRequest('orgs/getOrgMembers', $data);
 
          return $memberData;
      }
@@ -301,6 +304,46 @@
          }
 
        return $members;
+     }
+
+     public function sendForumPM($to, $body, $rsiToken) {
+
+         //create a cookie jar
+         $cookieJar = new CookieJar();
+
+         //create login token
+         $cookie = new SetCookie();
+         $cookie->setName('RsiToken');
+         $cookie->setValue($rsiToken);
+         $cookieJar->SetCookie($cookie);
+
+
+         //generate request
+         $client = $this->getClient();
+         $request = $client->createRequest('POST', 'https://forums.robertsspaceindustries.com/messages/add',
+             [
+                 'body' => [
+                     'To' => $to,
+                     'Format' => 'Html',
+                     'Body' => $body,
+                     'Start_Conversation' => 'Start_Conversation'
+                 ],
+                 'cookies' =>  $cookieJar
+             ]
+         );
+
+         //send
+         $response = $client->send($request);
+         $responseCode = $response->getStatusCode();
+         //check response codes
+         if($responseCode !== 200) {
+             $error = "Request returned $responseCode: ".$response->getReasonPhrase();
+             $error .= " TEXT: " . $response->getBody();
+             $error .= " Blah" . $response->getEffectiveUrl();
+             throw new BadResponseException($error, $request, $response);
+         }
+
+         return true;
      }
 
  }
