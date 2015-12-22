@@ -57,7 +57,7 @@ class RSIClientTest extends \PHPUnit_Framework_TestCase {
     public function testForumPM() {
         $guzzle = new GuzzleClient(array('defaults' => array('allow_redirects' => false, 'cookies' => true)));
         $client = new RSIClient($guzzle);
-        $result = $client->sendForumPM('siacn', 'Beep boop Robo-mail', '9480ecd32c63777de32573f282ff3bc5');
+        $result = $client->sendForumPM('siacn', 'Testing Refactored PM function');
 
         $this->assertTrue($result);
     }

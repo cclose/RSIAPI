@@ -33,11 +33,27 @@
  class RSIClient {
 
      protected static $RSI_API_URL = 'https://robertsspaceindustries.com/api/';
+     protected static $RSI_URL = 'https://forums.robertsspaceindustries.com/';
 
      /**
       * @var GuzzleClient $client
       */
      protected $client;
+
+     /**
+      * @var string $apiToken
+      *
+      * Stores the API KEY for a user account
+      * Used to make API/AJAX requests
+      */
+     protected $apiToken;
+
+     /**
+      * @var string $sessionToken
+      *
+      * Used to store the session ID of a non-AJAX session
+      */
+     protected $sessionToken = 'd0dc305b5017eec78e1d2a0fc02bd7d8';
 
      public function __construct(GuzzleClient $client = null) {
          if(is_null($client)) {
@@ -57,8 +73,15 @@
      /**
       * @return string|null
       */
-     protected function getRSIToken() {
-         return null;
+     protected function getAPIToken() {
+         return $this->apiToken;
+     }
+
+     /**
+      * @return string
+      */
+     public function getSessionToken() {
+         return $this->sessionToken;
      }
 
      /**
@@ -77,7 +100,7 @@
          $request->setHeader('Content-Type', 'application/json');
 
          //set rsi token if one exists
-         $rsiToken = $this->getRSIToken();
+         $rsiToken = $this->getAPIToken();
          if(!is_null($rsiToken)) {
              $request->setHeader('X-Rsi-Token', $rsiToken);
          }
@@ -306,28 +329,42 @@
        return $members;
      }
 
-     public function sendForumPM($to, $body, $rsiToken) {
+     public function sendForumPM($to, $body) {
+         $formData = [
+             'To' => $to,
+             'Format' => 'Html',
+             'Body' => $body,
+             'TransientKey' => 'POJ8JCL7KNO1',
+             'Start_Conversation' => 'Post Message'
+         ];
+
+         return $this->postFormRequest('messages/add', $formData);
+     }
+
+
+
+     public function postFormRequest($url, $formData) {
+         $fullUrl = $this::$RSI_URL . $url;
 
          //create a cookie jar
          $cookieJar = new CookieJar();
 
+         //get rsiToken
+         $rsiToken = $this->getSessionToken();
+
          //create login token
          $cookie = new SetCookie();
-         $cookie->setName('RsiToken');
+         $cookie->setName('Rsi-Token');
          $cookie->setValue($rsiToken);
+         $cookie->setDomain('.robertsspaceindustries.com');
          $cookieJar->SetCookie($cookie);
 
 
          //generate request
          $client = $this->getClient();
-         $request = $client->createRequest('POST', 'https://forums.robertsspaceindustries.com/messages/add',
+         $request = $client->createRequest('POST', $fullUrl,
              [
-                 'body' => [
-                     'To' => $to,
-                     'Format' => 'Html',
-                     'Body' => $body,
-                     'Start_Conversation' => 'Start_Conversation'
-                 ],
+                 'body' => $formData,
                  'cookies' =>  $cookieJar
              ]
          );
@@ -335,11 +372,13 @@
          //send
          $response = $client->send($request);
          $responseCode = $response->getStatusCode();
+
          //check response codes
          if($responseCode !== 200) {
+             if($responseCode == 302) {
+                 throw new \Exception("TODO: AUTHENTICATE!");
+             }
              $error = "Request returned $responseCode: ".$response->getReasonPhrase();
-             $error .= " TEXT: " . $response->getBody();
-             $error .= " Blah" . $response->getEffectiveUrl();
              throw new BadResponseException($error, $request, $response);
          }
 
