@@ -252,14 +252,14 @@
 
                  //VERY IMPORTANT NOTE
                  // If you are back-engineering this THE LEADING PERIOD IS VITALLY IMPORTANT
-                 // the // makes the f%$%^ing query relative to the document root, so you NEED
+                 // the // makes the query relative to the document root, so you NEED
                  // the leading period to make the query relative to the $node
                  //
                  // When i originally wrote this, i didn't have the leading period and this query
                  // returned ALL name-wrap spans from the return data, every. time.
                  // SUCH FRUSTERATION. MANY BALD. WOW.
                  $nameNode = $finder->query(".//span[contains(@class, 'name-wrap')]", $node);
-                 //we should only have on name-wrap span. bitch if this is not true
+                 //we should only have on name-wrap span. complain if this is not true
                  if($nameNode->length == 0) {
                     throw new BadResponseDataException('No NameNodes detected for member node');
                  }
